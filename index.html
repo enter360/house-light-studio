@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Govee Sequence Designer</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242738;
+    --border: #2e3248;
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --text: #e8eaf6;
+    --text2: #8b92b8;
+    --success: #4caf82;
+    --warn: #ffb347;
+    --danger: #ff5252;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* TOP BAR */
+  #topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #topbar h1 { font-size: 15px; font-weight: 600; color: var(--text); margin-right: 8px; }
+  #topbar h1 span { color: var(--accent); }
+  .btn {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); cursor: pointer; font-size: 12px;
+    display: flex; align-items: center; gap: 5px; transition: all .15s;
+  }
+  .btn:hover { border-color: var(--accent); background: #2a2d45; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #7b73ff; }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .btn.active { border-color: var(--accent); background: #2a2d45; color: var(--accent); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #playback-controls { display: flex; gap: 6px; align-items: center; }
+  #speed-label { color: var(--text2); font-size: 11px; }
+  #speed-input { width: 60px; padding: 4px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); font-size: 12px; }
+  .spacer { flex: 1; }
+  #status-bar { font-size: 11px; color: var(--text2); padding: 0 8px; }
+
+  /* MAIN LAYOUT */
+  #main { display: flex; flex: 1; overflow: hidden; }
+
+  /* SIDEBAR */
+  #sidebar {
+    width: 210px; flex-shrink: 0; background: var(--surface);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+    overflow-y: auto; padding: 12px;
+  }
+  .section-title {
+    font-size: 10px; font-weight: 700; letter-spacing: .1em;
+    color: var(--text2); text-transform: uppercase; margin-bottom: 8px; margin-top: 14px;
+  }
+  .section-title:first-child { margin-top: 0; }
+  .field { margin-bottom: 8px; }
+  .field label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+  .field input[type=text], .field input[type=number], .field select {
+    width: 100%; padding: 5px 8px; border-radius: 5px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-size: 12px;
+  }
+  .field input[type=range] { width: 100%; accent-color: var(--accent); }
+  .field-row { display: flex; gap: 6px; align-items: center; }
+  .field-row label { flex: 1; }
+
+  /* Loops list */
+  #loops-list { display: flex; flex-direction: column; gap: 5px; }
+  .loop-item {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 8px; font-size: 11px;
+  }
+  .loop-item .loop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .loop-item .loop-range { color: var(--accent); font-weight: 600; }
+  .loop-item .loop-count { color: var(--text2); }
+  .loop-item input[type=number] { width: 45px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 11px; }
+  .loop-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 13px; padding: 0 2px; }
+
+  /* CONTENT AREA */
+  #content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* VISUALIZER */
+  #visualizer {
+    flex-shrink: 0; background: var(--surface2); border-bottom: 1px solid var(--border);
+    padding: 16px 20px 12px; min-height: 110px;
+  }
+  #viz-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  #viz-canvas { display: block; width: 100%; }
+
+  /* FRAME EDITOR */
+  #frame-editor {
+    flex-shrink: 0; background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+  }
+  #editor-toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  #paint-color-wrap { display: flex; align-items: center; gap: 6px; }
+  #paint-color-wrap label { font-size: 11px; color: var(--text2); }
+  #paint-color { width: 30px; height: 24px; border: 2px solid var(--border); border-radius: 5px; cursor: pointer; padding: 0; background: none; }
+  #seg-grid {
+    display: flex; flex-wrap: wrap; gap: 3px;
+    max-height: 90px; overflow-y: auto; padding: 4px 0;
+  }
+  .seg-cell {
+    width: 26px; height: 26px; border-radius: 4px;
+    border: 2px solid transparent; cursor: pointer; position: relative;
+    transition: transform .1s, border-color .1s;
+    flex-shrink: 0;
+  }
+  .seg-cell:hover { transform: scale(1.15); border-color: #fff6; }
+  .seg-cell.selected { border-color: #fff; transform: scale(1.15); }
+  .seg-cell .seg-num {
+    position: absolute; bottom: 1px; right: 2px;
+    font-size: 7px; color: rgba(255,255,255,0.6); pointer-events: none;
+    text-shadow: 0 0 3px #000;
+  }
+  #effect-presets { display: flex; gap: 5px; flex-wrap: wrap; }
+
+  /* TIMELINE */
+  #timeline-area {
+    flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    padding: 10px 16px 8px;
+  }
+  #timeline-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  #timeline-scroll { flex: 1; overflow-x: auto; overflow-y: hidden; }
+  #timeline-track {
+    display: flex; gap: 4px; align-items: flex-start;
+    padding: 4px 0 8px; min-height: 90px;
+  }
+  .frame-thumb {
+    flex-shrink: 0; width: 72px; background: var(--surface2);
+    border: 2px solid var(--border); border-radius: 6px; cursor: pointer;
+    padding: 4px; transition: border-color .15s;
+    position: relative; user-select: none;
+  }
+  .frame-thumb:hover { border-color: var(--text2); }
+  .frame-thumb.active { border-color: var(--accent); }
+  .frame-thumb.loop-start { border-left-color: var(--warn) !important; }
+  .frame-thumb.loop-end { border-right-color: var(--warn) !important; }
+  .frame-swatch-row { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 4px; }
+  .frame-swatch { height: 6px; border-radius: 2px; flex: 1; min-width: 4px; }
+  .frame-meta { font-size: 10px; color: var(--text2); display: flex; justify-content: space-between; }
+  .frame-dur-input { width: 40px; background: none; border: none; color: var(--text2); font-size: 10px; text-align: right; cursor: text; }
+  .frame-dur-input:focus { outline: 1px solid var(--accent); border-radius: 3px; background: var(--bg); color: var(--text); }
+  .frame-del { position: absolute; top: 2px; right: 2px; background: none; border: none; color: var(--danger); cursor: pointer; font-size: 10px; opacity: 0; transition: opacity .15s; padding: 0; }
+  .frame-thumb:hover .frame-del { opacity: 1; }
+  .frame-loop-marker {
+    position: absolute; top: -14px; left: 0; right: 0; height: 10px;
+    background: #ffb34733; border-radius: 3px 3px 0 0;
+    font-size: 8px; color: var(--warn); display: flex; align-items: center; justify-content: center;
+  }
+  #add-frame-btn { flex-shrink: 0; width: 72px; height: 70px; border-radius: 6px; border: 2px dashed var(--border); background: none; color: var(--text2); cursor: pointer; font-size: 20px; transition: all .15s; display: flex; align-items: center; justify-content: center; }
+  #add-frame-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* PACKET MODAL */
+  #packet-modal {
+    display: none; position: fixed; inset: 0; background: #0008;
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  #packet-modal.open { display: flex; }
+  #packet-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    width: 580px; max-width: 95vw; max-height: 80vh; display: flex; flex-direction: column;
+  }
+  #packet-box-header {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #packet-box-header h2 { font-size: 14px; }
+  #packet-content { padding: 14px 16px; overflow-y: auto; flex: 1; }
+  #packet-content pre {
+    background: var(--bg); border-radius: 6px; padding: 12px;
+    font-size: 11px; white-space: pre-wrap; word-break: break-all;
+    max-height: 300px; overflow-y: auto; color: #a8d8a8;
+  }
+  #packet-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+  .tab-bar { display: flex; gap: 0; margin-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 5px 14px; cursor: pointer; font-size: 12px; color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <h1>🏠 Govee <span>Sequence</span> Designer</h1>
+  <div id="playback-controls">
+    <button class="btn" id="btn-prev" title="Previous frame">⏮</button>
+    <button class="btn" id="btn-play" title="Play">▶ Play</button>
+    <button class="btn" id="btn-next" title="Next frame">⏭</button>
+  </div>
+  <span id="speed-label">Speed:</span>
+  <input id="speed-input" type="number" value="1" min="0.1" max="10" step="0.1" title="Playback multiplier">
+  <span id="frame-counter" style="font-size:11px;color:var(--text2)">Frame 1/1</span>
+  <div class="spacer"></div>
+  <span id="status-bar">Ready</span>
+  <button class="btn" id="btn-discover" title="Discover devices on LAN">🔍 Discover</button>
+  <button class="btn primary" id="btn-export">⬇ Export JSON</button>
+  <button class="btn primary" id="btn-send">📡 Send to Device</button>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="section-title">Device</div>
+    <div class="field">
+      <label>IP Address</label>
+      <input type="text" id="device-ip" value="192.168.1.100" placeholder="192.168.x.x">
+    </div>
+    <div class="field">
+      <label>Brightness: <span id="bright-val">100</span>%</label>
+      <input type="range" id="brightness" min="1" max="100" value="100">
+    </div>
+
+    <div class="section-title">Segments</div>
+    <div class="field">
+      <label>Count (1–50)</label>
+      <input type="number" id="seg-count" value="15" min="1" max="50">
+    </div>
+    <div class="field">
+      <label>Layout</label>
+      <select id="viz-layout">
+        <option value="strip">Strip (horizontal)</option>
+        <option value="house">House outline</option>
+        <option value="line">Vertical strip</option>
+      </select>
+    </div>
+
+    <div class="section-title">Animation</div>
+    <div class="field">
+      <label>Direction</label>
+      <select id="anim-dir">
+        <option value="9">Up</option>
+        <option value="10">Down</option>
+        <option value="2">Cycle</option>
+        <option value="19">Fading</option>
+        <option value="15">Sparkle</option>
+        <option value="20">Breathe</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Speed: <span id="anim-speed-val">0</span></label>
+      <input type="range" id="anim-speed" min="0" max="100" value="0">
+    </div>
+
+    <div class="section-title">Loops</div>
+    <div id="loops-list"></div>
+    <button class="btn" id="btn-add-loop" style="width:100%;margin-top:6px;justify-content:center;">+ Add Loop</button>
+
+    <div class="section-title" style="margin-top:14px;">Import</div>
+    <button class="btn" id="btn-import" style="width:100%;justify-content:center;">📂 Import JSON</button>
+    <input type="file" id="import-file" accept=".json" style="display:none">
+  </div>
+
+  <!-- CONTENT -->
+  <div id="content">
+
+    <!-- VISUALIZER -->
+    <div id="visualizer">
+      <div id="viz-label">
+        <span>Live Preview</span>
+        <span id="viz-info" style="color:var(--text2)"></span>
+      </div>
+      <canvas id="viz-canvas" height="60"></canvas>
+    </div>
+
+    <!-- FRAME EDITOR -->
+    <div id="frame-editor">
+      <div id="editor-toolbar">
+        <div id="paint-color-wrap">
+          <label>Paint</label>
+          <input type="color" id="paint-color" value="#ff0000">
+        </div>
+        <button class="btn" id="btn-fill-all" title="Fill all segments with paint color">⬛ Fill All</button>
+        <button class="btn" id="btn-gradient" title="Apply gradient across segments">🌈 Gradient</button>
+        <button class="btn" id="btn-clear" title="Clear all to black">✖ Clear</button>
+        <button class="btn" id="btn-dup-frame" title="Duplicate current frame">⧉ Duplicate</button>
+        <button class="btn" id="btn-select-all" title="Select all segments">Select All</button>
+        <button class="btn" id="btn-deselect" title="Deselect">Deselect</button>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <span style="font-size:11px;color:var(--text2)">Frame</span>
+          <span id="editor-frame-label" style="font-size:12px;color:var(--accent)">1</span>
+        </div>
+      </div>
+      <div id="seg-grid"></div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div id="timeline-area">
+      <div id="timeline-header">
+        <span style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2)">Timeline</span>
+        <button class="btn" id="btn-clear-all-frames" style="font-size:11px">🗑 Clear All</button>
+        <div class="spacer"></div>
+        <span style="font-size:11px;color:var(--text2)" id="total-dur"></span>
+      </div>
+      <div id="timeline-scroll">
+        <div id="timeline-track">
+          <button id="add-frame-btn" title="Add frame">+</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- PACKET/SEND MODAL -->
+<div id="packet-modal">
+  <div id="packet-box">
+    <div id="packet-box-header">
+      <h2>Send to Device / Export</h2>
+      <button class="btn" id="btn-close-modal">✕</button>
+    </div>
+    <div id="packet-content">
+      <div class="tab-bar">
+        <div class="tab active" data-tab="single">Current Frame</div>
+        <div class="tab" data-tab="sequence">Full Sequence</div>
+        <div class="tab" data-tab="info">How to Send</div>
+      </div>
+      <div id="tab-single">
+        <p style="color:var(--text2);font-size:11px;margin-bottom:8px;">UDP payload for current frame → send to <span id="modal-ip" style="color:var(--accent)">192.168.1.100</span>:4003</p>
+        <pre id="packet-json"></pre>
+      </div>
+      <div id="tab-sequence" style="display:none">
+        <p style="color:var(--text2);font-size:11px;margin-bottom:8px;">Full sequence as JSON (import back into this app or use with a controller script)</p>
+        <pre id="sequence-json"></pre>
+      </div>
+      <div id="tab-info" style="display:none;font-size:12px;line-height:1.6;color:var(--text2)">
+        <p><strong style="color:var(--text)">Local LAN (UDP)</strong> — direct, no internet needed</p>
+        <p>Send the JSON payload to your device IP on <strong>UDP port 4003</strong>.</p>
+        <br>
+        <p>Example using netcat (Linux/Mac):</p>
+        <pre style="background:var(--bg);padding:8px;border-radius:5px;margin:6px 0;color:#a8d8a8;font-size:11px">echo '&lt;JSON&gt;' | nc -w1 -u 192.168.x.x 4003</pre>
+        <p>Example using Python:</p>
+        <pre style="background:var(--bg);padding:8px;border-radius:5px;margin:6px 0;color:#a8d8a8;font-size:11px">import socket, json
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.sendto(json.dumps(payload).encode(), ('192.168.x.x', 4003))</pre>
+        <br>
+        <p><strong style="color:var(--text)">Browser limitation</strong>: Browsers cannot send raw UDP. Use the exported JSON with the script above, or run a local WebSocket-to-UDP bridge.</p>
+        <br>
+        <p><strong style="color:var(--text)">Discovery</strong>: Send <code style="background:var(--bg);padding:2px 5px;border-radius:3px">{"msg":{"cmd":"scan","data":{"account_topic":"reserve"}}}</code> to multicast <code style="background:var(--bg);padding:2px 5px;border-radius:3px">239.255.255.250:4001</code> — devices reply on port 4002.</p>
+      </div>
+    </div>
+    <div id="packet-footer">
+      <button class="btn primary" id="btn-copy-packet">📋 Copy JSON</button>
+      <button class="btn" id="btn-dl-packet">⬇ Download</button>
+      <div class="spacer"></div>
+      <button class="btn" id="btn-close-modal2">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- GRADIENT DIALOG -->
+<div id="grad-modal" style="display:none;position:fixed;inset:0;background:#0008;z-index:101;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;width:300px;">
+    <h3 style="margin-bottom:12px;font-size:14px;">Apply Gradient</h3>
+    <div class="field"><label>Color A (start)</label><input type="color" id="grad-a" value="#ff0000" style="width:100%;height:32px;padding:0;border:1px solid var(--border);border-radius:5px;cursor:pointer;"></div>
+    <div class="field"><label>Color B (end)</label><input type="color" id="grad-b" value="#0000ff" style="width:100%;height:32px;padding:0;border:1px solid var(--border);border-radius:5px;cursor:pointer;"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn primary" id="grad-apply" style="flex:1;justify-content:center;">Apply</button>
+      <button class="btn" id="grad-cancel" style="flex:1;justify-content:center;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  segmentCount: 15,
+  deviceIP: '192.168.1.100',
+  brightness: 100,
+  animDir: 9,
+  animSpeed: 0,
+  frames: [],
+  loops: [],
+  currentFrameIdx: 0,
+  selectedSegs: new Set(),
+  paintColor: '#ff0000',
+  playing: false,
+  playTimer: null,
+  playSpeed: 1,
+  vizLayout: 'strip',
+};
+
+let loopIdCounter = 0;
+let frameIdCounter = 0;
+
+function makeFrame(colors) {
+  return {
+    id: 'f' + (++frameIdCounter),
+    colors: colors || Array(state.segmentCount).fill('#000000'),
+    duration: 500,
+  };
+}
+
+function makeLoop(start, end, count) {
+  return { id: 'l' + (++loopIdCounter), start, end, count };
+}
+
+// ============================================================
+// PACKET GENERATION (Grafiti / ptReal)
+// ============================================================
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return [
+    parseInt(h.slice(0,2),16),
+    parseInt(h.slice(2,4),16),
+    parseInt(h.slice(4,6),16)
+  ];
+}
+
+function rgbToHex(r,g,b) {
+  return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+function buildGrafitiPackets(colors, dir, spd) {
+  const n = colors.length;
+  if (n === 0) return [];
+
+  // Build hex command string
+  // Format: 01 [packetCount:2] 03 [dir:2] [speed:2] [bgIntensity:2] [bgR:2][bgG:2][bgB:2] [segCount:2]
+  //         then for each seg: [segSize:2] [R:2][G:2][B:2] [pixelIdx:2...]
+  // Each segment = 1 pixel here (individual control)
+
+  let cmd = '01pc'; // pc = placeholder for packet count
+  cmd += '03'; // grafiti mode
+  cmd += dir.toString(16).padStart(2,'0');
+  cmd += spd.toString(16).padStart(2,'0');
+  cmd += '00'; // bg intensity = 0
+  cmd += '000000'; // bg color = black
+  cmd += n.toString(16).padStart(2,'0'); // segment count
+
+  for (let i = 0; i < n; i++) {
+    const [r,g,b] = hexToRgb(colors[i]);
+    cmd += '01'; // segment size = 1 pixel
+    cmd += r.toString(16).padStart(2,'0');
+    cmd += g.toString(16).padStart(2,'0');
+    cmd += b.toString(16).padStart(2,'0');
+    cmd += i.toString(16).padStart(2,'0'); // pixel index
+  }
+
+  // Split into 17-byte (34 hex char) chunks
+  const chunks = [];
+  for (let i = 0; i < Math.ceil(cmd.length / 34); i++) {
+    chunks.push(cmd.slice(i*34, Math.min((i+1)*34, cmd.length)));
+  }
+
+  // Replace 'pc' placeholder in first chunk
+  chunks[0] = chunks[0].replace('pc', chunks.length.toString(16).padStart(2,'0'));
+
+  // Build base64 packets
+  const packets = [];
+  for (let i = 0; i < chunks.length; i++) {
+    let pkt;
+    if (i < chunks.length - 1) {
+      pkt = 'a3' + i.toString(16).padStart(2,'0') + chunks[i];
+    } else {
+      pkt = 'a3ff' + chunks[i];
+      pkt = pkt.padEnd(38, '0'); // pad last packet to 19 bytes (38 hex)
+    }
+    // XOR checksum
+    let xor = 0;
+    for (let j = 0; j < pkt.length; j += 2) {
+      xor ^= parseInt(pkt.slice(j, j+2), 16);
+    }
+    pkt += xor.toString(16).padStart(2,'0');
+    // Hex → bytes → base64
+    const bytes = [];
+    for (let j = 0; j < pkt.length; j += 2) {
+      bytes.push(parseInt(pkt.slice(j, j+2), 16));
+    }
+    packets.push(btoa(String.fromCharCode(...bytes)));
+  }
+
+  // Always append the terminator packet
+  packets.push('MwUKIAMAAAAAAAAAAAAAAAAAAB8=');
+  return packets;
+}
+
+function buildLanPayload(colors) {
+  const dir = parseInt(document.getElementById('anim-dir').value);
+  const spd = parseInt(document.getElementById('anim-speed').value);
+  const packets = buildGrafitiPackets(colors, dir, spd);
+  return { msg: { cmd: 'ptReal', data: { command: packets } } };
+}
+
+// ============================================================
+// VISUALIZER
+// ============================================================
+const canvas = document.getElementById('viz-canvas');
+const ctx = canvas.getContext('2d');
+
+function drawViz(colors) {
+  const layout = document.getElementById('viz-layout').value;
+  const W = canvas.parentElement.clientWidth - 40;
+  canvas.width = W;
+
+  if (layout === 'strip' || layout === 'line') {
+    const n = colors.length;
+    const isVertical = layout === 'line';
+    const SIZE = isVertical ? 24 : Math.min(Math.floor((W - n*3) / n), 40);
+    const H = isVertical ? Math.min(n * (SIZE+3) + 10, 200) : SIZE + 20;
+    canvas.height = H;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0,0,W,H);
+
+    if (!isVertical) {
+      // Horizontal strip
+      const totalW = n * (SIZE + 3) - 3;
+      const startX = Math.max(4, (W - totalW) / 2);
+      for (let i = 0; i < n; i++) {
+        const x = startX + i * (SIZE + 3);
+        // Glow
+        const [r,g,b] = hexToRgb(colors[i]);
+        if (r+g+b > 10) {
+          ctx.shadowColor = colors[i];
+          ctx.shadowBlur = 10;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillStyle = colors[i];
+        ctx.beginPath();
+        ctx.roundRect(x, 8, SIZE, SIZE, 4);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        // Segment number
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '7px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(i+1, x + SIZE/2, SIZE + 16);
+      }
+    } else {
+      // Vertical strip
+      for (let i = 0; i < n; i++) {
+        const y = 5 + i * (SIZE + 3);
+        ctx.fillStyle = colors[i];
+        ctx.shadowColor = colors[i];
+        ctx.shadowBlur = hexToRgb(colors[i]).reduce((a,b)=>a+b,0) > 10 ? 8 : 0;
+        ctx.beginPath();
+        ctx.roundRect(10, y, SIZE, SIZE, 4);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '7px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(i+1, 38, y + SIZE/2 + 3);
+      }
+    }
+
+  } else if (layout === 'house') {
+    const H = 130;
+    canvas.height = H;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0,0,W,H);
+
+    // Build perimeter path points
+    const mx = W/2, pw = W*0.7, ph = H*0.55;
+    const roofTip = { x: mx, y: 10 };
+    const roofL = { x: mx - pw/2, y: H*0.42 };
+    const roofR = { x: mx + pw/2, y: H*0.42 };
+    const wallBL = { x: mx - pw/2, y: H - 14 };
+    const wallBR = { x: mx + pw/2, y: H - 14 };
+
+    // Distribute n points along perimeter: roofTip→roofR→wallBR→wallBL→roofL→roofTip
+    const segments = [
+      [roofTip, roofR],
+      [roofR, wallBR],
+      [wallBR, wallBL],
+      [wallBL, roofL],
+      [roofL, roofTip],
+    ];
+
+    function segLen(a,b) { return Math.hypot(b.x-a.x, b.y-a.y); }
+    const totalLen = segments.reduce((s,[a,b])=>s+segLen(a,b),0);
+    const n = colors.length;
+    const step = totalLen / n;
+
+    let pts = [];
+    let dist = 0, segIdx = 0, segPos = 0;
+    for (let i = 0; i < n; i++) {
+      const d = i * step;
+      let rem = d;
+      let si = 0, sp = 0;
+      for (let j = 0; j < segments.length; j++) {
+        const l = segLen(...segments[j]);
+        if (rem <= l) { si = j; sp = rem / l; break; }
+        rem -= l;
+      }
+      const [a,b] = segments[si];
+      pts.push({ x: a.x + (b.x-a.x)*sp, y: a.y + (b.y-a.y)*sp, color: colors[i] });
+    }
+
+    // Draw house outline
+    ctx.strokeStyle = '#2e3248';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(roofTip.x, roofTip.y);
+    ctx.lineTo(roofR.x, roofR.y);
+    ctx.lineTo(wallBR.x, wallBR.y);
+    ctx.lineTo(wallBL.x, wallBL.y);
+    ctx.lineTo(roofL.x, roofL.y);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Draw light dots
+    const dotR = Math.max(3, Math.min(7, 90/n));
+    for (const { x, y, color } of pts) {
+      const [r,g,b] = hexToRgb(color);
+      ctx.shadowColor = color;
+      ctx.shadowBlur = r+g+b > 10 ? 10 : 0;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, dotR, 0, Math.PI*2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+
+  document.getElementById('viz-info').textContent = `${colors.length} segments`;
+}
+
+// ============================================================
+// SEGMENT GRID
+// ============================================================
+function renderSegGrid() {
+  const grid = document.getElementById('seg-grid');
+  grid.innerHTML = '';
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  for (let i = 0; i < state.segmentCount; i++) {
+    const color = frame.colors[i] || '#000000';
+    const cell = document.createElement('div');
+    cell.className = 'seg-cell' + (state.selectedSegs.has(i) ? ' selected' : '');
+    cell.style.background = color;
+    cell.title = `Segment ${i+1}: ${color}`;
+    cell.innerHTML = `<span class="seg-num">${i+1}</span>`;
+    cell.addEventListener('click', (e) => {
+      if (e.shiftKey) {
+        // Range select
+        const last = [...state.selectedSegs].pop() ?? 0;
+        const min = Math.min(last, i), max = Math.max(last, i);
+        for (let j = min; j <= max; j++) state.selectedSegs.add(j);
+      } else if (e.ctrlKey || e.metaKey) {
+        state.selectedSegs.has(i) ? state.selectedSegs.delete(i) : state.selectedSegs.add(i);
+      } else {
+        if (state.selectedSegs.size > 0) {
+          // Paint selected or click
+          applyPaintToSeg(i);
+          return;
+        }
+        applyPaintToSeg(i);
+      }
+      renderSegGrid();
+      updateAll();
+    });
+    // Right click for context
+    cell.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      state.selectedSegs.has(i) ? state.selectedSegs.delete(i) : state.selectedSegs.add(i);
+      renderSegGrid();
+    });
+    grid.appendChild(cell);
+  }
+}
+
+function applyPaintToSeg(idx) {
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  frame.colors[idx] = state.paintColor;
+  renderSegGrid();
+  updateAll();
+}
+
+function applyPaintToSelected() {
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  if (state.selectedSegs.size === 0) return;
+  state.selectedSegs.forEach(i => { frame.colors[i] = state.paintColor; });
+  renderSegGrid();
+  updateAll();
+}
+
+// ============================================================
+// TIMELINE
+// ============================================================
+function getLoopsForFrame(frameIdx) {
+  return state.loops.filter(l => frameIdx >= l.start && frameIdx <= l.end);
+}
+
+function renderTimeline() {
+  const track = document.getElementById('timeline-track');
+  // Remove existing frame thumbs (keep add-button)
+  [...track.querySelectorAll('.frame-thumb')].forEach(el => el.remove());
+  const addBtn = document.getElementById('add-frame-btn');
+
+  let totalMs = 0;
+  state.frames.forEach((frame, idx) => {
+    const loops = getLoopsForFrame(idx);
+    const isLoopStart = state.loops.some(l => l.start === idx);
+    const isLoopEnd = state.loops.some(l => l.end === idx);
+
+    const thumb = document.createElement('div');
+    thumb.className = 'frame-thumb' + (idx === state.currentFrameIdx ? ' active' : '')
+      + (isLoopStart ? ' loop-start' : '') + (isLoopEnd ? ' loop-end' : '');
+    thumb.dataset.idx = idx;
+
+    if (isLoopStart) {
+      const loopInfo = state.loops.find(l => l.start === idx);
+      const marker = document.createElement('div');
+      marker.className = 'frame-loop-marker';
+      marker.textContent = `↻ ${loopInfo.count < 0 ? '∞' : loopInfo.count}×`;
+      thumb.appendChild(marker);
+    }
+
+    // Mini color swatches
+    const swatchRow = document.createElement('div');
+    swatchRow.className = 'frame-swatch-row';
+    const colors = frame.colors;
+    const displayN = Math.min(colors.length, 14);
+    for (let i = 0; i < displayN; i++) {
+      const sw = document.createElement('div');
+      sw.className = 'frame-swatch';
+      sw.style.background = colors[i] || '#000';
+      swatchRow.appendChild(sw);
+    }
+    thumb.appendChild(swatchRow);
+
+    // Frame meta
+    const meta = document.createElement('div');
+    meta.className = 'frame-meta';
+    const numSpan = document.createElement('span');
+    numSpan.textContent = idx + 1;
+    const durInput = document.createElement('input');
+    durInput.type = 'number';
+    durInput.className = 'frame-dur-input';
+    durInput.value = frame.duration;
+    durInput.title = 'Duration (ms)';
+    durInput.min = 50;
+    durInput.addEventListener('change', () => {
+      frame.duration = Math.max(50, parseInt(durInput.value) || 500);
+      durInput.value = frame.duration;
+      updateTotalDuration();
+    });
+    durInput.addEventListener('click', e => e.stopPropagation());
+    meta.appendChild(numSpan);
+    meta.appendChild(durInput);
+    thumb.appendChild(meta);
+
+    // Delete button
+    const delBtn = document.createElement('button');
+    delBtn.className = 'frame-del';
+    delBtn.title = 'Delete frame';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (state.frames.length === 1) return;
+      state.frames.splice(idx, 1);
+      // Fix loops
+      state.loops = state.loops.filter(l => l.start < state.frames.length && l.end < state.frames.length);
+      state.currentFrameIdx = Math.min(state.currentFrameIdx, state.frames.length - 1);
+      updateAll();
+    });
+    thumb.appendChild(delBtn);
+
+    thumb.addEventListener('click', () => {
+      state.currentFrameIdx = idx;
+      updateAll();
+    });
+
+    track.insertBefore(thumb, addBtn);
+    totalMs += frame.duration;
+  });
+
+  updateTotalDuration();
+  renderSegGrid();
+  document.getElementById('frame-counter').textContent = `Frame ${state.currentFrameIdx+1}/${state.frames.length}`;
+  document.getElementById('editor-frame-label').textContent = state.currentFrameIdx + 1;
+}
+
+function updateTotalDuration() {
+  const total = state.frames.reduce((s,f) => s+f.duration, 0);
+  document.getElementById('total-dur').textContent = total >= 1000 ? `${(total/1000).toFixed(1)}s total` : `${total}ms total`;
+}
+
+// ============================================================
+// LOOPS
+// ============================================================
+function renderLoops() {
+  const list = document.getElementById('loops-list');
+  list.innerHTML = '';
+  state.loops.forEach((loop, idx) => {
+    const item = document.createElement('div');
+    item.className = 'loop-item';
+    item.innerHTML = `
+      <div class="loop-header">
+        <span class="loop-range">Frames ${loop.start+1}–${loop.end+1}</span>
+        <button class="loop-del" data-id="${loop.id}">✕</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="color:var(--text2);font-size:11px">Start:</span>
+        <input type="number" value="${loop.start+1}" min="1" max="${state.frames.length}" class="loop-start-input" data-id="${loop.id}" style="width:40px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
+        <span style="color:var(--text2);font-size:11px">End:</span>
+        <input type="number" value="${loop.end+1}" min="1" max="${state.frames.length}" class="loop-end-input" data-id="${loop.id}" style="width:40px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+        <span style="color:var(--text2);font-size:11px">Repeat:</span>
+        <input type="number" value="${loop.count}" min="-1" max="999" class="loop-count-input" data-id="${loop.id}" style="width:50px;padding:2px 4px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:11px">
+        <span style="color:var(--text2);font-size:10px">(-1=∞)</span>
+      </div>`;
+    list.appendChild(item);
+  });
+
+  list.querySelectorAll('.loop-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.loops = state.loops.filter(l => l.id !== btn.dataset.id);
+      renderLoops();
+      renderTimeline();
+    });
+  });
+  list.querySelectorAll('.loop-start-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const loop = state.loops.find(l => l.id === inp.dataset.id);
+      if (loop) { loop.start = Math.max(0, parseInt(inp.value)-1); renderTimeline(); }
+    });
+  });
+  list.querySelectorAll('.loop-end-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const loop = state.loops.find(l => l.id === inp.dataset.id);
+      if (loop) { loop.end = Math.min(state.frames.length-1, parseInt(inp.value)-1); renderTimeline(); }
+    });
+  });
+  list.querySelectorAll('.loop-count-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const loop = state.loops.find(l => l.id === inp.dataset.id);
+      if (loop) { loop.count = parseInt(inp.value); }
+    });
+  });
+}
+
+// ============================================================
+// PLAYBACK
+// ============================================================
+function buildPlaybackSequence() {
+  // Expand frames considering loops
+  const seq = [];
+  const loopMap = {};
+  state.loops.forEach(l => {
+    for (let f = l.start; f <= l.end; f++) {
+      if (!loopMap[f]) loopMap[f] = [];
+      loopMap[f].push(l);
+    }
+  });
+
+  let i = 0;
+  const MAX_FRAMES = 500;
+  const loopCounts = {};
+  state.loops.forEach(l => { loopCounts[l.id] = 0; });
+
+  while (i < state.frames.length && seq.length < MAX_FRAMES) {
+    seq.push(i);
+    // Check if i is the end of a loop
+    const endingLoops = state.loops.filter(l => l.end === i);
+    let jumped = false;
+    for (const loop of endingLoops) {
+      const maxCount = loop.count < 0 ? 99 : loop.count;
+      if (loopCounts[loop.id] < maxCount - 1) {
+        loopCounts[loop.id]++;
+        i = loop.start;
+        jumped = true;
+        break;
+      } else {
+        loopCounts[loop.id] = 0;
+      }
+    }
+    if (!jumped) i++;
+  }
+  return seq;
+}
+
+let playSeq = [];
+let playSeqIdx = 0;
+
+function startPlayback() {
+  if (state.playing) return;
+  state.playing = true;
+  document.getElementById('btn-play').textContent = '⏸ Pause';
+  playSeq = buildPlaybackSequence();
+  playSeqIdx = 0;
+  playNext();
+}
+
+function stopPlayback() {
+  state.playing = false;
+  clearTimeout(state.playTimer);
+  document.getElementById('btn-play').textContent = '▶ Play';
+}
+
+function playNext() {
+  if (!state.playing) return;
+  if (playSeqIdx >= playSeq.length) {
+    playSeqIdx = 0; // loop sequence
+  }
+  const frameIdx = playSeq[playSeqIdx];
+  state.currentFrameIdx = frameIdx;
+  const frame = state.frames[frameIdx];
+  if (frame) {
+    drawViz(frame.colors);
+    updateFrameHighlight();
+  }
+  playSeqIdx++;
+  const speed = parseFloat(document.getElementById('speed-input').value) || 1;
+  state.playTimer = setTimeout(playNext, (frame?.duration || 500) / speed);
+}
+
+function updateFrameHighlight() {
+  document.querySelectorAll('.frame-thumb').forEach((el, i) => {
+    el.classList.toggle('active', i === state.currentFrameIdx);
+  });
+  document.getElementById('frame-counter').textContent = `Frame ${state.currentFrameIdx+1}/${state.frames.length}`;
+  document.getElementById('editor-frame-label').textContent = state.currentFrameIdx + 1;
+}
+
+// ============================================================
+// MAIN UPDATE
+// ============================================================
+function updateAll() {
+  const frame = state.frames[state.currentFrameIdx];
+  if (frame) {
+    // Ensure frame has right number of colors
+    while (frame.colors.length < state.segmentCount) frame.colors.push('#000000');
+    drawViz(frame.colors);
+  }
+  renderTimeline();
+  renderLoops();
+  renderSegGrid();
+}
+
+// ============================================================
+// IMPORT / EXPORT
+// ============================================================
+function exportData() {
+  return {
+    version: 1,
+    segmentCount: state.segmentCount,
+    animDir: state.animDir,
+    animSpeed: state.animSpeed,
+    brightness: state.brightness,
+    frames: state.frames,
+    loops: state.loops,
+  };
+}
+
+function importData(data) {
+  if (!data || !data.frames) { alert('Invalid file'); return; }
+  state.segmentCount = data.segmentCount || 15;
+  state.animDir = data.animDir || 9;
+  state.animSpeed = data.animSpeed || 0;
+  state.brightness = data.brightness || 100;
+  state.frames = data.frames;
+  state.loops = data.loops || [];
+  frameIdCounter = state.frames.length;
+  loopIdCounter = state.loops.length;
+  state.currentFrameIdx = 0;
+  document.getElementById('seg-count').value = state.segmentCount;
+  document.getElementById('brightness').value = state.brightness;
+  document.getElementById('bright-val').textContent = state.brightness;
+  document.getElementById('anim-dir').value = state.animDir;
+  document.getElementById('anim-speed').value = state.animSpeed;
+  document.getElementById('anim-speed-val').textContent = state.animSpeed;
+  updateAll();
+}
+
+// ============================================================
+// GRADIENT HELPER
+// ============================================================
+function lerpColor(a, b, t) {
+  const [r1,g1,b1] = hexToRgb(a);
+  const [r2,g2,b2] = hexToRgb(b);
+  return rgbToHex(
+    Math.round(r1 + (r2-r1)*t),
+    Math.round(g1 + (g2-g1)*t),
+    Math.round(b1 + (b2-b1)*t)
+  );
+}
+
+// ============================================================
+// EVENT LISTENERS
+// ============================================================
+document.getElementById('seg-count').addEventListener('change', () => {
+  const v = Math.max(1, Math.min(50, parseInt(document.getElementById('seg-count').value)||15));
+  state.segmentCount = v;
+  document.getElementById('seg-count').value = v;
+  state.frames.forEach(f => {
+    while (f.colors.length < v) f.colors.push('#000000');
+    f.colors.length = v;
+  });
+  updateAll();
+});
+
+document.getElementById('device-ip').addEventListener('change', () => {
+  state.deviceIP = document.getElementById('device-ip').value;
+  document.getElementById('modal-ip').textContent = state.deviceIP;
+});
+
+document.getElementById('brightness').addEventListener('input', () => {
+  const v = parseInt(document.getElementById('brightness').value);
+  state.brightness = v;
+  document.getElementById('bright-val').textContent = v;
+});
+
+document.getElementById('anim-dir').addEventListener('change', () => {
+  state.animDir = parseInt(document.getElementById('anim-dir').value);
+});
+
+document.getElementById('anim-speed').addEventListener('input', () => {
+  const v = parseInt(document.getElementById('anim-speed').value);
+  state.animSpeed = v;
+  document.getElementById('anim-speed-val').textContent = v;
+});
+
+document.getElementById('viz-layout').addEventListener('change', () => {
+  state.vizLayout = document.getElementById('viz-layout').value;
+  updateAll();
+});
+
+document.getElementById('paint-color').addEventListener('input', () => {
+  state.paintColor = document.getElementById('paint-color').value;
+});
+
+document.getElementById('btn-fill-all').addEventListener('click', () => {
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  for (let i = 0; i < state.segmentCount; i++) frame.colors[i] = state.paintColor;
+  updateAll();
+});
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  frame.colors = Array(state.segmentCount).fill('#000000');
+  updateAll();
+});
+
+document.getElementById('btn-select-all').addEventListener('click', () => {
+  for (let i = 0; i < state.segmentCount; i++) state.selectedSegs.add(i);
+  renderSegGrid();
+});
+
+document.getElementById('btn-deselect').addEventListener('click', () => {
+  state.selectedSegs.clear();
+  renderSegGrid();
+});
+
+document.getElementById('btn-dup-frame').addEventListener('click', () => {
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  const newFrame = { id: 'f'+(++frameIdCounter), colors: [...frame.colors], duration: frame.duration };
+  state.frames.splice(state.currentFrameIdx + 1, 0, newFrame);
+  state.currentFrameIdx++;
+  updateAll();
+});
+
+document.getElementById('btn-gradient').addEventListener('click', () => {
+  document.getElementById('grad-modal').style.display = 'flex';
+});
+document.getElementById('grad-cancel').addEventListener('click', () => {
+  document.getElementById('grad-modal').style.display = 'none';
+});
+document.getElementById('grad-apply').addEventListener('click', () => {
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  const a = document.getElementById('grad-a').value;
+  const b = document.getElementById('grad-b').value;
+  const targets = state.selectedSegs.size > 0 ? [...state.selectedSegs].sort((x,y)=>x-y) : [...Array(state.segmentCount).keys()];
+  targets.forEach((segIdx, i) => {
+    frame.colors[segIdx] = lerpColor(a, b, i / Math.max(1, targets.length - 1));
+  });
+  document.getElementById('grad-modal').style.display = 'none';
+  updateAll();
+});
+
+document.getElementById('add-frame-btn').addEventListener('click', () => {
+  const prev = state.frames[state.frames.length - 1];
+  const newFrame = makeFrame(prev ? [...prev.colors] : undefined);
+  state.frames.push(newFrame);
+  state.currentFrameIdx = state.frames.length - 1;
+  updateAll();
+});
+
+document.getElementById('btn-add-loop').addEventListener('click', () => {
+  const n = state.frames.length;
+  const start = Math.max(0, state.currentFrameIdx);
+  const end = Math.min(n-1, start + 1);
+  state.loops.push(makeLoop(start, end, 2));
+  renderLoops();
+  renderTimeline();
+});
+
+document.getElementById('btn-clear-all-frames').addEventListener('click', () => {
+  if (!confirm('Clear all frames?')) return;
+  state.frames = [makeFrame()];
+  state.loops = [];
+  state.currentFrameIdx = 0;
+  updateAll();
+});
+
+// Playback
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (state.playing) stopPlayback();
+  else startPlayback();
+});
+
+document.getElementById('btn-prev').addEventListener('click', () => {
+  stopPlayback();
+  state.currentFrameIdx = Math.max(0, state.currentFrameIdx - 1);
+  updateAll();
+});
+
+document.getElementById('btn-next').addEventListener('click', () => {
+  stopPlayback();
+  state.currentFrameIdx = Math.min(state.frames.length - 1, state.currentFrameIdx + 1);
+  updateAll();
+});
+
+// Send / export
+function openModal(tab) {
+  const frame = state.frames[state.currentFrameIdx];
+  if (frame) {
+    const payload = buildLanPayload(frame.colors);
+    document.getElementById('packet-json').textContent = JSON.stringify(payload, null, 2);
+  }
+  const exportData_ = exportData();
+  document.getElementById('sequence-json').textContent = JSON.stringify(exportData_, null, 2);
+  document.getElementById('modal-ip').textContent = state.deviceIP;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('tab-single').style.display = tab === 'single' ? '' : 'none';
+  document.getElementById('tab-sequence').style.display = tab === 'sequence' ? '' : 'none';
+  document.getElementById('tab-info').style.display = tab === 'info' ? '' : 'none';
+  document.getElementById('packet-modal').classList.add('open');
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => openModal(tab.dataset.tab));
+});
+
+document.getElementById('btn-send').addEventListener('click', () => openModal('single'));
+document.getElementById('btn-export').addEventListener('click', () => openModal('sequence'));
+document.getElementById('btn-close-modal').addEventListener('click', () => document.getElementById('packet-modal').classList.remove('open'));
+document.getElementById('btn-close-modal2').addEventListener('click', () => document.getElementById('packet-modal').classList.remove('open'));
+
+document.getElementById('btn-copy-packet').addEventListener('click', () => {
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+  const text = activeTab === 'sequence'
+    ? document.getElementById('sequence-json').textContent
+    : document.getElementById('packet-json').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    document.getElementById('btn-copy-packet').textContent = '✓ Copied!';
+    setTimeout(() => document.getElementById('btn-copy-packet').textContent = '📋 Copy JSON', 1500);
+  });
+});
+
+document.getElementById('btn-dl-packet').addEventListener('click', () => {
+  const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+  const text = activeTab === 'sequence'
+    ? document.getElementById('sequence-json').textContent
+    : document.getElementById('packet-json').textContent;
+  const blob = new Blob([text], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = activeTab === 'sequence' ? 'govee-sequence.json' : 'govee-frame.json';
+  a.click();
+});
+
+document.getElementById('btn-discover').addEventListener('click', () => {
+  setStatus('ℹ️ Discovery requires UDP (browser limitation). See Send → How to Send for details.', 4000);
+  openModal('info');
+});
+
+document.getElementById('btn-import').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+document.getElementById('import-file').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try { importData(JSON.parse(ev.target.result)); setStatus('✓ Imported', 2000); }
+    catch(err) { alert('Import failed: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); document.getElementById('btn-play').click(); }
+  if (e.code === 'ArrowRight') { stopPlayback(); state.currentFrameIdx = Math.min(state.frames.length-1, state.currentFrameIdx+1); updateAll(); }
+  if (e.code === 'ArrowLeft') { stopPlayback(); state.currentFrameIdx = Math.max(0, state.currentFrameIdx-1); updateAll(); }
+  if (e.code === 'KeyD' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); document.getElementById('btn-dup-frame').click(); }
+  if (e.code === 'KeyF' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); document.getElementById('btn-fill-all').click(); }
+  if (e.code === 'KeyA' && (e.ctrlKey||e.metaKey)) { e.preventDefault(); document.getElementById('btn-select-all').click(); }
+  if (e.code === 'Escape') { state.selectedSegs.clear(); renderSegGrid(); }
+  if (e.code === 'Enter' && e.shiftKey) document.getElementById('add-frame-btn').click();
+});
+
+// Status helper
+let statusTimer;
+function setStatus(msg, duration) {
+  document.getElementById('status-bar').textContent = msg;
+  clearTimeout(statusTimer);
+  if (duration) statusTimer = setTimeout(() => document.getElementById('status-bar').textContent = 'Ready', duration);
+}
+
+// Close modal on backdrop click
+document.getElementById('packet-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('packet-modal')) document.getElementById('packet-modal').classList.remove('open');
+});
+document.getElementById('grad-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('grad-modal')) document.getElementById('grad-modal').style.display = 'none';
+});
+
+// ============================================================
+// INIT
+// ============================================================
+state.frames.push(makeFrame());
+state.frames.push(makeFrame(Array(15).fill('#000000').map((_,i) => {
+  const colors = ['#ff0000','#ff4400','#ff8800','#ffcc00','#88ff00','#00ff88','#00ffff','#0088ff','#0000ff','#4400ff','#8800ff','#cc00ff','#ff00cc','#ff0088','#ff0000'];
+  return colors[i % colors.length];
+})));
+// Frame 2: all blue
+const blueFrame = makeFrame();
+blueFrame.colors = Array(15).fill('#0044ff');
+state.frames.push(blueFrame);
+
+updateAll();
+setStatus('Ready — click segments to paint, Shift+Enter to add frame, Space to play', 5000);
+</script>
+</body>
+</html>
