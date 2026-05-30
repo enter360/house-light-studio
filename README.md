@@ -94,17 +94,45 @@ Full protocol documentation: [`docs/protocol.md`](docs/protocol.md)
 | Right-click segment | Toggle select |
 | `Shift+click` segment | Range select |
 
+## Home Assistant
+
+House Light Studio ships as a **native HA add-on** — not a HACS integration. Add-ons run as supervised containers managed by the HA Supervisor; HACS is for custom integrations and Lovelace plugins, which is a separate system.
+
+### Installing the add-on
+
+> **Requires:** Home Assistant OS or Supervised + Mosquitto broker add-on
+
+1. Go to **Settings → Add-ons → Add-on Store**
+2. Click **⋮ → Repositories**
+3. Add `https://github.com/YOUR_USERNAME/house-light-studio`
+4. Find **House Light Studio** and click **Install → Start**
+5. The designer opens in the HA sidebar under **Light Studio**
+
+The add-on auto-connects to your Mosquitto broker. Each discovered Govee device appears as a `light` entity. Sequences you save in the designer become **light effects** you can trigger from automations, dashboards, and voice assistants.
+
+```yaml
+# Example automation
+action:
+  - service: light.turn_on
+    target:
+      entity_id: light.govee_h705a
+    data:
+      effect: "Sunset"
+      brightness: 200
+```
+
+Full add-on docs: [`ha-addon/README.md`](ha-addon/README.md)
+
 ## Contributing
 
 PRs and issues welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Ideas for future work:
-- WebSocket ↔ UDP bridge (Python/Node) for live in-browser sending
-- Device auto-discovery via multicast scan
 - Scene presets library (chase, breathe, twinkle, etc.)
 - Timeline drag-to-reorder frames
 - Per-segment timing offsets
-- Export to Home Assistant shell_command
+- Multi-device sync (send one sequence to multiple lights simultaneously)
+- Live sequence playback via bridge (not just first-frame)
 
 ## License
 
