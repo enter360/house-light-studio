@@ -263,6 +263,30 @@
     <div class="section-title" style="margin-top:14px;">Import</div>
     <button class="btn" id="btn-import" style="width:100%;justify-content:center;">📂 Import JSON</button>
     <input type="file" id="import-file" accept=".json" style="display:none">
+
+    <div class="section-title" style="margin-top:14px;">Bridge / HA</div>
+    <div class="field">
+      <label>WebSocket URL</label>
+      <input type="text" id="bridge-url" value="ws://homeassistant.local:8765" placeholder="ws://...">
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:6px;">
+      <button class="btn" id="btn-bridge-connect" style="flex:1;justify-content:center;">Connect</button>
+      <span id="bridge-dot" style="width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block;align-self:center;flex-shrink:0;" title="Disconnected"></span>
+    </div>
+    <div id="bridge-devices" style="display:none">
+      <div class="field">
+        <label>Device</label>
+        <select id="bridge-device-select" style="width:100%;padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;">
+          <option value="">— select —</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sequence name</label>
+        <input type="text" id="bridge-seq-name" placeholder="e.g. Sunset" style="width:100%;padding:5px 8px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;">
+      </div>
+      <button class="btn primary" id="btn-bridge-save" style="width:100%;justify-content:center;margin-bottom:4px;">💾 Save to HA</button>
+      <button class="btn" id="btn-bridge-send-live" style="width:100%;justify-content:center;">📡 Send Frame Live</button>
+    </div>
   </div>
 
   <!-- CONTENT -->
@@ -1234,6 +1258,111 @@ document.getElementById('packet-modal').addEventListener('click', (e) => {
 });
 document.getElementById('grad-modal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('grad-modal')) document.getElementById('grad-modal').style.display = 'none';
+});
+
+// ============================================================
+// BRIDGE (WebSocket ↔ HA add-on)
+// ============================================================
+let bridgeWs = null;
+
+function bridgeConnected() { return bridgeWs && bridgeWs.readyState === WebSocket.OPEN; }
+
+function setBridgeDot(connected) {
+  const dot = document.getElementById('bridge-dot');
+  dot.style.background = connected ? 'var(--success)' : 'var(--danger)';
+  dot.title = connected ? 'Connected' : 'Disconnected';
+  document.getElementById('bridge-devices').style.display = connected ? '' : 'none';
+  document.getElementById('btn-bridge-connect').textContent = connected ? 'Disconnect' : 'Connect';
+}
+
+function bridgeSend(msg) {
+  if (!bridgeConnected()) { setStatus('⚠ Bridge not connected', 2000); return false; }
+  bridgeWs.send(JSON.stringify(msg));
+  return true;
+}
+
+function connectBridge() {
+  if (bridgeConnected()) {
+    bridgeWs.close();
+    return;
+  }
+  const url = document.getElementById('bridge-url').value.trim();
+  if (!url) return;
+  setStatus('Connecting to bridge…');
+  try {
+    bridgeWs = new WebSocket(url);
+  } catch(e) {
+    setStatus('⚠ Invalid WebSocket URL', 3000);
+    return;
+  }
+
+  bridgeWs.onopen = () => {
+    setStatus('✓ Bridge connected', 3000);
+    setBridgeDot(true);
+    bridgeSend({ type: 'discover' });
+  };
+
+  bridgeWs.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'devices') {
+        const sel = document.getElementById('bridge-device-select');
+        sel.innerHTML = '<option value="">— select —</option>';
+        (msg.devices || []).forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.device_id;
+          opt.textContent = `${d.sku || 'Unknown'} (${d.ip || '?'})`;
+          opt.dataset.ip = d.ip || '';
+          sel.appendChild(opt);
+        });
+        if (msg.devices?.length === 1) sel.value = msg.devices[0].device_id;
+      } else if (msg.type === 'ack') {
+        setStatus(msg.ok ? '✓ Done' : `⚠ ${msg.error}`, 2000);
+      } else if (msg.type === 'state') {
+        setStatus(`Device state: ${msg.state || ''} effect=${msg.effect || 'none'}`, 3000);
+      }
+    } catch(err) {}
+  };
+
+  bridgeWs.onerror = () => { setStatus('⚠ Bridge connection error', 3000); };
+
+  bridgeWs.onclose = () => {
+    setStatus('Bridge disconnected', 2000);
+    setBridgeDot(false);
+    bridgeWs = null;
+  };
+}
+
+document.getElementById('btn-bridge-connect').addEventListener('click', connectBridge);
+
+document.getElementById('btn-bridge-save').addEventListener('click', () => {
+  const devId = document.getElementById('bridge-device-select').value;
+  const name = document.getElementById('bridge-seq-name').value.trim();
+  if (!devId) { setStatus('⚠ Select a device first', 2000); return; }
+  if (!name)  { setStatus('⚠ Enter a sequence name', 2000); return; }
+  const data = exportData();
+  bridgeSend({ type: 'save_sequence', device_id: devId, name, sequence: data });
+  setStatus(`Saving "${name}" to HA…`);
+});
+
+document.getElementById('btn-bridge-send-live').addEventListener('click', () => {
+  const devId = document.getElementById('bridge-device-select').value;
+  const sel = document.getElementById('bridge-device-select');
+  const opt = sel.options[sel.selectedIndex];
+  const ip = opt?.dataset?.ip || '';
+  if (!devId || !ip) { setStatus('⚠ Select a device first', 2000); return; }
+  const frame = state.frames[state.currentFrameIdx];
+  if (!frame) return;
+  bridgeSend({
+    type: 'send_frame',
+    device_id: devId,
+    device_ip: ip,
+    colors: frame.colors,
+    brightness: state.brightness,
+    direction: state.animDir,
+    speed: state.animSpeed,
+  });
+  setStatus('Sent frame via bridge', 1500);
 });
 
 // ============================================================
