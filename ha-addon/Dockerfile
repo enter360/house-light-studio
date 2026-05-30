@@ -11,8 +11,10 @@ RUN pip3 install --no-cache-dir -r requirements.txt --break-system-packages
 
 COPY src/ .
 
-# Copy the designer UI so we can serve it through ingress
-COPY ../index.html ./static/index.html
+# The designer UI is copied here by the build script (build.sh) before
+# `docker build` runs, because Docker cannot reach outside its build context.
+# See build.sh for details.
+COPY static/ ./static/
 
 # Persistent data directory (sequences, device registry)
 VOLUME ["/data"]

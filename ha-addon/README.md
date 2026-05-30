@@ -2,7 +2,7 @@
 
 Runs the full House Light Studio designer inside Home Assistant, with MQTT integration so your Govee lights appear as native HA light entities.
 
-## What it does
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -10,7 +10,7 @@ Runs the full House Light Studio designer inside Home Assistant, with MQTT integ
 │  ┌────────────┐   MQTT commands    ┌─────────────────────┐  │
 │  │ Automations│ ──────────────────▶│  House Light Studio │  │
 │  │ Dashboard  │                    │  Add-on (bridge)    │  │
-│  │ Alexa/GH   │ ◀────────────────── │                     │  │
+│  │ Alexa/GH   │ ◀──────────────────│                     │  │
 │  └────────────┘   MQTT state       │  • Device discovery │  │
 │                                    │  • Sequence storage  │  │
 │  ┌────────────┐   WebSocket        │  • HA MQTT discovery │  │
@@ -24,51 +24,80 @@ Runs the full House Light Studio designer inside Home Assistant, with MQTT integ
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## Prerequisites
+
+Before installing the add-on:
+
+1. **Home Assistant OS or Supervised** — add-ons are not available on Home Assistant Container or Core
+2. **Mosquitto broker add-on** installed and running
+   - Go to **Settings → Add-ons → Add-on Store → Mosquitto broker → Install → Start**
+   - In Mosquitto's **Configuration** tab, ensure `customize.active` is `false` (default) — this allows the add-on to auto-connect without extra credentials
+3. **LAN Control enabled on your Govee lights**
+   - Open the **Govee Home** app → tap your device → Settings → **LAN Control → ON**
+   - Your lights and HA must be on the **same network/VLAN**
+
 ## Installation
 
-### Prerequisites
-- Home Assistant OS or Supervised
-- **Mosquitto broker** add-on installed and running
-- Govee lights with **LAN Control enabled** (Govee app → device → Settings → LAN Control)
+### Step 1 — Add this repository to HA
 
-### Install the add-on
+1. Go to **Settings → Add-ons → Add-on Store**
+2. Click the **⋮ menu** (top right) → **Repositories**
+3. Paste the URL and click **Add**:
+   ```
+   https://github.com/YOUR_USERNAME/house-light-studio
+   ```
+4. Close the dialog — the store will refresh
 
-1. In HA, go to **Settings → Add-ons → Add-on Store**
-2. Click the **⋮ menu → Repositories**
-3. Add: `https://github.com/YOUR_USERNAME/house-light-studio`
-4. Find **House Light Studio** in the store and click **Install**
-5. Start the add-on
+### Step 2 — Install and start
 
-The add-on auto-connects to your Mosquitto broker via HA's service discovery — no MQTT credentials to configure in most setups.
+1. Find **House Light Studio** in the store (scroll down or search)
+2. Click **Install** and wait for the image to download (~1–2 min)
+3. Click **Start**
+4. Enable **"Show in sidebar"** if you want quick access from the HA nav
 
-### Manual MQTT config (if not using Mosquitto add-on)
+### Step 3 — Open the designer
 
-In the add-on **Configuration** tab:
+- Click **Open Web UI** on the add-on page, or
+- Click **Light Studio** in the HA sidebar
+
+The add-on auto-discovers your Govee lights on startup (takes ~5 seconds). You'll see them appear in the **Bridge / HA** section of the designer sidebar.
+
+## Configuration
+
+Most users need no manual config — the add-on connects to Mosquitto automatically via HA's service discovery.
+
+If you're using an external MQTT broker, set these in the add-on **Configuration** tab:
 
 ```yaml
-mqtt_host: "192.168.1.x"
+mqtt_host: "192.168.1.x"    # your broker IP
 mqtt_port: 1883
-mqtt_username: "your_user"
-mqtt_password: "your_password"
+mqtt_username: "your_user"  # leave blank if no auth
+mqtt_password: "your_pass"
+scan_interval: 60           # seconds between device re-scans
+topic_prefix: "govee_studio"
 ```
 
 ## Using the Designer
 
-1. Click **Open Web UI** in the add-on page (or find "Light Studio" in the HA sidebar)
-2. In the sidebar under **Bridge / HA**, click **Connect** — it auto-connects since you're inside HA
-3. Design your sequence, then click **💾 Save to HA** with a name like "Sunset"
-4. The sequence appears as a **light effect** on your Govee entity in HA
+1. Open the web UI (sidebar or **Open Web UI**)
+2. Under **Bridge / HA** in the left sidebar, click **Connect**
+   - The URL defaults to `ws://homeassistant.local:8765` — change it if your HA has a different hostname
+3. Select your device from the **Device** dropdown
+4. Design your sequence using the segment editor and timeline
+5. Enter a name (e.g. `Sunset`) in the **Sequence name** field
+6. Click **💾 Save to HA** — this stores the sequence and republishes MQTT discovery
+7. Your Govee device now has a new **effect** in HA named `Sunset`
 
 ## Home Assistant Integration
 
-Each discovered Govee device appears as a `light` entity with:
+Each discovered Govee device appears as a `light` entity supporting:
 
 | Feature | Details |
 |---------|---------|
-| On/Off | Sends `turn` command via UDP |
-| Brightness | Maps HA 0–255 → Govee 1–100% |
-| Effects | Each saved sequence = one effect |
-| State | Published back to MQTT after each command |
+| On/Off | UDP `turn` command |
+| Brightness | HA 0–255 mapped to Govee 1–100% |
+| Effects | Each saved sequence = one selectable effect |
+| State reporting | Published to MQTT after every command |
 
 ### Example automation
 
@@ -85,6 +114,15 @@ automation:
         data:
           effect: "Sunset"
           brightness: 200
+
+  - alias: "Turn off at midnight"
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: light.turn_off
+        target:
+          entity_id: light.govee_h705a
 ```
 
 ### Dashboard card
@@ -99,17 +137,19 @@ name: House Lights
 
 | Topic | Direction | Description |
 |-------|-----------|-------------|
-| `govee_studio/{device_id}/set` | HA → Bridge | Commands (JSON) |
-| `govee_studio/{device_id}/state` | Bridge → HA | State (JSON) |
-| `homeassistant/light/hls_{device_id}/config` | Bridge → HA | Discovery |
+| `govee_studio/{device_id}/set` | HA → Add-on | On/off, brightness, effect commands |
+| `govee_studio/{device_id}/state` | Add-on → HA | Current state after each command |
+| `homeassistant/light/hls_{device_id}/config` | Add-on → HA | Auto-discovery config (retained) |
 
-### Command payload
+`{device_id}` is the device's MAC address with colons stripped and lowercased, e.g. `1f80c532323672`.
+
+### Command payload (HA → Add-on)
 
 ```json
 { "state": "ON", "brightness": 200, "effect": "Sunset" }
 ```
 
-### State payload
+### State payload (Add-on → HA)
 
 ```json
 { "state": "ON", "brightness": 200, "effect": "Sunset" }
@@ -119,25 +159,46 @@ name: House Lights
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
-| 8099 | HTTP | Designer web UI (also via HA ingress) |
-| 8765 | WebSocket | Browser ↔ bridge real-time control |
+| 8099 | HTTP | Designer web UI (also served via HA ingress) |
+| 8765 | WebSocket | Browser ↔ add-on real-time control |
 
 ## Data Storage
 
-Sequences and device registry are persisted in the add-on's `/data` directory and survive restarts.
+The add-on stores device registry and sequences in `/data` (the add-on's persistent storage directory). This survives restarts and updates. You can back it up via HA's built-in backup system.
+
+## Building Locally (developers)
+
+The `ha-addon/` directory is the Docker build context, so `index.html` must be staged there before building:
+
+```bash
+cd ha-addon
+chmod +x build.sh
+./build.sh
+```
+
+This copies `index.html` into `ha-addon/static/`, then builds the image. See `build.sh` for the full command including how to run the container standalone for testing without HA.
 
 ## Troubleshooting
 
+**Add-on doesn't appear after adding repository**
+- Hard refresh the browser (Ctrl+Shift+R) after adding the repository URL
+- Check HA logs under **Settings → System → Logs** for Supervisor errors
+
 **No devices discovered**
-- Confirm LAN Control is enabled in the Govee app for each device
-- Check that your HA instance is on the same network/VLAN as the lights
-- UDP multicast may be blocked on some managed switches — try assigning a static IP to your lights and adding it to the scan list
+- Confirm LAN Control is enabled in the Govee app (per Prerequisites above)
+- Confirm your HA instance and lights are on the same network — separate VLANs will block UDP multicast
+- Check the add-on logs (**Add-ons → House Light Studio → Log**) for discovery output
 
 **MQTT not connecting**
-- Ensure Mosquitto add-on is running
-- Check the add-on logs for the MQTT connection error
-- Try setting credentials manually in Configuration
+- Verify the Mosquitto add-on is running (green status dot)
+- Open Mosquitto's **Log** tab — look for connection errors mentioning `house_light_studio`
+- If you see auth errors, set credentials manually in the Configuration tab
 
 **Effects not showing in HA**
-- Save at least one sequence via the designer UI first
-- Restart the add-on after saving new sequences to force a discovery re-publish
+- You must save at least one sequence in the designer first
+- After saving, wait ~10 seconds for MQTT discovery to republish, then check **Developer Tools → States** and search for your light entity
+- If still missing, restart the add-on to force a fresh discovery publish
+
+**WebSocket won't connect from the designer**
+- Make sure the bridge URL is `ws://homeassistant.local:8765` (or your HA's IP/hostname)
+- If accessing HA via HTTPS, you may need `wss://` — only works if you have a valid TLS cert
